@@ -1529,7 +1529,7 @@ const FX = (() => {
   return { play, buzz, reduced, grain, petals, sparks };
 })();
 
-/* Bloom: animierte Übungsfiguren mit festen Knochenlängen (FK + 2-Knochen-IK) */
+/* Bloom: animierte Übungsfiguren mit Volumen (FK + 2-Knochen-IK, Kapsel-Gliedmaßen, Torso-Profil) */
 const Figure = (() => {
   const G = 150;                       // Bodenlinie
   const LEN = { torso: 46, neck: 7, head: 9.5, ua: 25, fa: 23, th: 37, sh: 35, foot: 11 };
@@ -1574,7 +1574,7 @@ const Figure = (() => {
       return [P, k, a, add(a, sa + 90 + (po.F || 0), LEN.foot)];
     };
     return {
-      P, S, Nk, Hc, T,
+      P, S, Nk, Hc, T, Hd: po.Hd, ab: po.ab,
       a1: arm(po.A, po.HA, po.eb), a2: arm(po.A2 || po.A, po.HA2 || po.HA, po.eb2 ?? po.eb),
       l1: leg(po.L, po.LA, po.kb), l2: leg(po.L2 || po.L, po.LA2 || po.LA, po.kb2 ?? po.kb)
     };
@@ -1600,35 +1600,114 @@ const Figure = (() => {
     return { S, Hc, hy, cx, legs, arms, hw, sw };
   }
 
-  const C = { skin: '#F1C6B0', skin2: '#E3B39C', top: '#B9A3D6', top2: '#A893CA', leg: '#8C78BF', leg2: '#C2B5DE', hair: '#6E5A73', shoe: '#E7A588', prop: '#CDBFD6', propD: '#A796B4', metal: '#9C8FA8', plate: '#9CCBB2', ground: '#E8DDE6' };
+  const C = { skin: '#F3CBB5', skin2: '#E2B19A', top: '#B9A3D6', top2: '#A893CA', leg: '#8C78BF', leg2: '#B8AADA', hair: '#5E4A66', shoe: '#F2B8A0', shoe2: '#E9C3B3', sole: '#FFF6F0', tie: '#9CCBB2', ink: '#423748', blush: '#EE9F8A', band: '#A08DCB', mouth: '#B5756A', prop: '#D9CDE2', propD: '#B3A3C2', metal: '#9C8FA8', plate: '#9CCBB2', ground: '#E8DDE6' };
   const pl = pts => pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L');
   const line = (pts, col, w, op = 1) => `<path d="M${pl(pts)}" stroke="${col}" stroke-width="${w}" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${op}"/>`;
   const circ = (p, r, f, extra = '') => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${r}" fill="${f}" ${extra}/>`;
 
-  function drawSide(k) {
-    const hairBack = add(k.Hc, k.T + 205, 9);
-    const bun = add(k.Hc, k.T + 150, 10.5);
-    return line([k.a2[0], k.a2[1], k.a2[2]], C.skin2, 6.5) +
-      line([k.l2[0], k.l2[1], k.l2[2]], C.leg2, 10) + line([k.l2[2], k.l2[3]], C.shoe, 6, .8) +
-      line([k.P, k.S], C.top, 15) + line([k.P, add(k.P, k.T, 8)], C.leg, 15) +
-      line([k.S, k.Nk], C.skin, 7) +
-      circ(bun, 5.2, C.hair) + circ(k.Hc, LEN.head, C.skin) +
-      `<path d="M${(k.Hc[0] + dir(k.T + 250)[0] * 9.5).toFixed(1)} ${(k.Hc[1] + dir(k.T + 250)[1] * 9.5).toFixed(1)} A9.5 9.5 0 0 1 ${(k.Hc[0] + dir(k.T + 70)[0] * 9.5).toFixed(1)} ${(k.Hc[1] + dir(k.T + 70)[1] * 9.5).toFixed(1)}" fill="${C.hair}" opacity=".95"/>` +
-      line([k.l1[0], k.l1[1], k.l1[2]], C.leg, 10.5) + line([k.l1[2], k.l1[3]], C.shoe, 6) +
-      line([k.a1[0], k.a1[1], k.a1[2]], C.skin, 6.5) + circ(k.a1[2], 3.4, C.skin);
+  /* Körper mit Volumen: Kapseln, Torso-Profil, Kopf mit Gesicht und Zopf */
+  const V = (p, q, s = 1) => [p[0] + q[0] * s, p[1] + q[1] * s];
+  const sub = (p, q) => [p[0] - q[0], p[1] - q[1]];
+  const nrm = v => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
+  const f1 = n => n.toFixed(1);
+  const P2 = p => f1(p[0]) + ' ' + f1(p[1]);
+  function smooth(pts, closed = true) {
+    const n = pts.length; let d = 'M' + P2(pts[0]);
+    const at = i => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
+    const last = closed ? n : n - 1;
+    for (let i = 0; i < last; i++) {
+      const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+      const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+      d += 'C' + P2(c1) + ' ' + P2(c2) + ' ' + P2(p2);
+    }
+    return d + (closed ? 'Z' : '');
   }
-  function drawFront(f) {
-    let s = '';
-    f.legs.forEach(l => { s += line(l, C.leg, 10.5); s += line([l[2], [l[2][0] + (l[2][0] > f.cx ? 5 : -5), l[2][1] + 1]], C.shoe, 6); });
-    s += `<path d="M${f.cx - 15} ${f.S[1] + 2} Q${f.cx} ${f.S[1] - 3} ${f.cx + 15} ${f.S[1] + 2} L${f.cx + 10} ${f.hy} L${f.cx - 10} ${f.hy} Z" fill="${C.top}" stroke="${C.top}" stroke-width="5" stroke-linejoin="round"/>`;
-    s += `<path d="M${f.cx - 11} ${f.hy - 4} L${f.cx + 11} ${f.hy - 4} L${f.cx + 10} ${f.hy + 5} L${f.cx - 10} ${f.hy + 5}Z" fill="${C.leg}" stroke="${C.leg}" stroke-width="4" stroke-linejoin="round"/>`;
-    f.arms.forEach(a => { s += line(a, C.skin, 6.5) + circ(a[2], 3.4, C.skin); });
-    s += line([[f.cx, f.S[1]], [f.cx, f.S[1] - LEN.neck]], C.skin, 7);
-    s += circ([f.cx, f.Hc[1] - 6], 5.2, C.hair) + circ(f.Hc, LEN.head, C.skin);
-    s += `<path d="M${f.cx - 9.5} ${f.Hc[1]} A9.5 9.5 0 0 1 ${f.cx + 9.5} ${f.Hc[1]} Q${f.cx} ${f.Hc[1] - 5} ${f.cx - 9.5} ${f.Hc[1]}Z" fill="${C.hair}"/>`;
+  const K = .5523;
+  function capsule(a, b, ra, rb, col, bulge = 0, op = 1) {
+    const u = nrm(sub(b, a)), n = [-u[1], u[0]];
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], rm = (ra + rb) / 2 + bulge;
+    const pa1 = V(a, n, ra), pa2 = V(a, n, -ra), pb1 = V(b, n, rb), pb2 = V(b, n, -rb);
+    const tb = V(b, u, rb), ta = V(a, u, -ra);
+    return `<path d="M${P2(pa1)}Q${P2(V(m, n, rm * 2 - (ra + rb) / 2))} ${P2(pb1)}` +
+      `C${P2(V(pb1, u, rb * K))} ${P2(V(tb, n, rb * K))} ${P2(tb)}` +
+      `C${P2(V(tb, n, -rb * K))} ${P2(V(pb2, u, rb * K))} ${P2(pb2)}` +
+      `Q${P2(V(m, n, -(rm * 2 - (ra + rb) / 2)))} ${P2(pa2)}` +
+      `C${P2(V(pa2, u, -ra * K))} ${P2(V(ta, n, -ra * K))} ${P2(ta)}` +
+      `C${P2(V(ta, n, ra * K))} ${P2(V(pa1, u, -ra * K))} ${P2(pa1)}Z" fill="${col}" opacity="${op}"/>`;
+  }
+  const dot = (p, r, f, op = 1) => `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${r}" fill="${f}" opacity="${op}"/>`;
+  const shadow = (x, w) => `<ellipse cx="${f1(x)}" cy="${G + .5}" rx="${w}" ry="3.2" fill="#423748" opacity=".07"/>`;
+
+  function legSide(l, far) {
+    const [hip, kn, an, toe] = l, col = far ? C.leg2 : C.leg, sc = far ? C.shoe2 : C.shoe;
+    return capsule(hip, kn, 7.2, 4.9, col, .5) + dot(kn, 4.8, col) + capsule(kn, an, 4.7, 2.8, col, 1.1) +
+      capsule(V(an, nrm(sub(toe, an)), -1.5), toe, 3.6, 2.4, sc);
+  }
+  function armSide(a, far) {
+    const [sh, el, ha] = a, col = far ? C.skin2 : C.skin;
+    return capsule(sh, el, 4.1, 3.0, col, .5) + dot(el, 2.9, col) + capsule(el, ha, 3.0, 2.2, col, .3) + dot(ha, 3, col);
+  }
+  function headSide(Hc, T, Hd) {
+    const uh = dir(T + (Hd || 0)), nh = [-uh[1], uh[0]], r = LEN.head;
+    const at = (deg, rr = r) => { const t = deg * D; return [Hc[0] + rr * (nh[0] * Math.cos(t) + uh[0] * Math.sin(t)), Hc[1] + rr * (nh[1] * Math.cos(t) + uh[1] * Math.sin(t))]; };
+    const tieP = at(165, r + .6);
+    let tailEnd = V(V(tieP, nh, -5), [0, 1], 10);
+    if (tailEnd[1] > G - 3) { const back = nh[0] > 0 ? -1 : 1; tailEnd = [tieP[0] + back * 11, G - 3]; }
+    let s = capsule(tieP, tailEnd, 4.2, 1.6, C.hair, 1.2);
+    s += dot(Hc, r, C.skin);
+    const hairPts = []; for (let a = 52; a <= 262; a += 15) hairPts.push(at(a, r + .9));
+    hairPts.push(at(262, r * .55)); hairPts.push(V(Hc, nh, -1.2)); hairPts.push(at(70, r * .62));
+    s += `<path d="${smooth(hairPts)}" fill="${C.hair}"/>`;
+    s += dot(at(165, r + .7), 2.4, C.tie);
+    s += dot(V(Hc, nh, .4), 1.9, C.skin2);
+    s += dot(V(V(Hc, nh, 5.2), uh, 1.4), 1.15, C.ink);
+    s += dot(V(V(Hc, nh, 4.6), uh, -2.6), 2.1, C.blush, .55);
+    s += dot(V(V(Hc, nh, r - .3), uh, -.6), 1.6, C.skin);
     return s;
   }
+  function torsoSide(P, T) {
+    const u = dir(T), n = [-u[1], u[0]];
+    const prof = [[-5, 4.5, 6.8], [1, 7.8, 10.6], [9, 7.6, 9.4], [18, 6.3, 6.2], [26, 7.2, 6.3], [33, 9.4, 6.9], [40, 7.8, 7.6], [46, 5.6, 6.8], [50, 1.5, 3.5]];
+    const pt = (s, o) => V(V(P, u, s), n, o);
+    const all = prof.map(([s, fr]) => pt(s, fr)).concat(prof.slice().reverse().map(([s, , bk]) => pt(s, -bk)));
+    const low = prof.filter(([s]) => s <= 14);
+    const lowPts = low.map(([s, fr]) => pt(s, fr)).concat([pt(15, 7.1), pt(15, 0), pt(15, -7.6)], low.slice().reverse().map(([s, , bk]) => pt(s, -bk)));
+    return `<path d="${smooth(all)}" fill="${C.top}"/>` + `<path d="${smooth(lowPts)}" fill="${C.leg}"/>` +
+      `<path d="M${P2(pt(15.5, 7.3))}L${P2(pt(15.5, -7.7))}" stroke="${C.band}" stroke-width="1.6" stroke-linecap="round"/>`;
+  }
+  function drawSide(k) {
+    const neckA = V(k.S, dir(k.T), -3);
+    return armSide(k.a2, true) + legSide(k.l2, true) +
+      capsule(neckA, k.Nk, 3.4, 3.1, C.skin2) +
+      torsoSide(k.P, k.T) + legSide(k.l1, false) +
+      (k.ab ? armSide(k.a1, false) + headSide(k.Hc, k.T, k.Hd) : headSide(k.Hc, k.T, k.Hd) + armSide(k.a1, false));
+  }
 
+  function drawFront(f) {
+    const cx = f.cx, Sy = f.S[1], hy = f.hy, H = hy - Sy, y = t => Sy + H * t;
+    let s = '';
+    f.legs.forEach(l => {
+      const [hip, kn, an] = l, out = an[0] > cx ? 1 : -1;
+      s += capsule(hip, kn, 7, 4.9, C.leg, .6) + dot(kn, 4.8, C.leg) + capsule(kn, an, 4.6, 2.9, C.leg, .8);
+      s += capsule([an[0] - out * 1, an[1] - 1], [an[0] + out * 4.5, an[1] + .6], 3.5, 2.8, C.shoe);
+    });
+    const torso = [[cx - 6, Sy - 1.5], [cx - 13.5, Sy + 1.5], [cx - 13, y(.3)], [cx - 9.4, y(.6)], [cx - 11.6, hy - 1], [cx - 10, hy + 7], [cx, hy + 8.5], [cx + 10, hy + 7], [cx + 11.6, hy - 1], [cx + 9.4, y(.6)], [cx + 13, y(.3)], [cx + 13.5, Sy + 1.5], [cx + 6, Sy - 1.5]];
+    s += `<path d="${smooth(torso)}" fill="${C.top}"/>`;
+    const low = [[cx - 10.2, y(.68)], [cx - 11.6, hy - 1], [cx - 10, hy + 7], [cx, hy + 8.5], [cx + 10, hy + 7], [cx + 11.6, hy - 1], [cx + 10.2, y(.68)], [cx, y(.69)]];
+    s += `<path d="${smooth(low)}" fill="${C.leg}"/>`;
+    s += `<path d="M${f1(cx - 10.2)} ${f1(y(.68))}Q${cx} ${f1(y(.7))} ${f1(cx + 10.2)} ${f1(y(.68))}" stroke="${C.band}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+    f.arms.forEach(a => { s += capsule(a[0], a[1], 4, 3, C.skin, .4) + dot(a[1], 2.9, C.skin) + capsule(a[1], a[2], 3, 2.2, C.skin, .3) + dot(a[2], 3, C.skin); });
+    const Hc = f.Hc;
+    s += capsule([cx, Sy + 2], [cx, Sy - LEN.neck], 3.4, 3.1, C.skin2);
+    s += dot([cx, Hc[1] - 10.5], 5.2, C.hair) + dot([cx, Hc[1] - 6.8], 2.2, C.tie);
+    s += dot(Hc, LEN.head, C.skin);
+    s += `<path d="M${f1(cx - 10.2)} ${f1(Hc[1] + 1.5)}C${f1(cx - 11)} ${f1(Hc[1] - 13)} ${f1(cx + 11)} ${f1(Hc[1] - 13)} ${f1(cx + 10.2)} ${f1(Hc[1] + 1.5)}C${f1(cx + 7.5)} ${f1(Hc[1] - 4)} ${f1(cx + 2)} ${f1(Hc[1] - 6.5)} ${cx} ${f1(Hc[1] - 6)}C${f1(cx - 3)} ${f1(Hc[1] - 6.5)} ${f1(cx - 7.5)} ${f1(Hc[1] - 4)} ${f1(cx - 10.2)} ${f1(Hc[1] + 1.5)}Z" fill="${C.hair}"/>`;
+    s += dot([cx - 3.4, Hc[1] + .8], 1.1, C.ink) + dot([cx + 3.4, Hc[1] + .8], 1.1, C.ink);
+    s += dot([cx - 5.3, Hc[1] + 3.6], 1.9, C.blush, .55) + dot([cx + 5.3, Hc[1] + 3.6], 1.9, C.blush, .55);
+    s += `<path d="M${f1(cx - 1.6)} ${f1(Hc[1] + 4.6)}Q${cx} ${f1(Hc[1] + 5.8)} ${f1(cx + 1.6)} ${f1(Hc[1] + 4.6)}" stroke="${C.mouth}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+    return s;
+  }
   /* Requisiten */
   const bench = (x, y, w) => `<rect x="${x}" y="${y}" width="${w}" height="7" rx="3.5" fill="${C.prop}"/><path d="M${x + 6} ${y + 7}V${G} M${x + w - 6} ${y + 7}V${G}" stroke="${C.propD}" stroke-width="4" stroke-linecap="round"/>`;
   const plateAt = (p, r = 13) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${r}" fill="${C.plate}" opacity=".95"/><circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${r * .3}" fill="#E3F1E9"/>`;
@@ -1645,8 +1724,8 @@ const Figure = (() => {
     hipthrust: {
       view: 'side', seq: [0, 1], hold: [.35, .7],
       f: [
-        { P: [84, Y(20)], ST: [52, Y(56)], Hd: -22, LA: [134, Y(3)], kb: -1, HA: [92, Y(28)], eb: 1 },
-        { P: [100, Y(57)], ST: [54, Y(59)], Hd: -34, LA: [134, Y(3)], kb: -1, HA: [104, Y(64)], eb: 1 }
+        { P: [84, Y(20)], ST: [52, Y(56)], Hd: -24, LA: [134, Y(3)], kb: -1, HA: [92, Y(28)], eb: 1 },
+        { P: [100, Y(57)], ST: [54, Y(59)], Hd: -38, LA: [134, Y(3)], kb: -1, HA: [104, Y(64)], eb: 1 }
       ],
       props: k => bench(24, Y(54), 34) + plateAt([k.P[0] + 2, k.P[1] - 11]) + `<path d="M${(k.P[0] - 16).toFixed(1)} ${(k.P[1] - 11).toFixed(1)}h36" stroke="${C.metal}" stroke-width="3" stroke-linecap="round"/>`
     },
@@ -1676,16 +1755,16 @@ const Figure = (() => {
     kickback: {
       view: 'side', seq: [0, 1], hold: [.2, .5],
       f: [
-        { P: [92, Y(70)], T: 145, Hd: 8, HA: [150, Y(98)], eb: -1, HA2: [150, Y(98)], LA2: [96, Y(3)], kb2: -1, L: [6, -2] },
-        { P: [92, Y(70)], T: 145, Hd: 8, HA: [150, Y(98)], eb: -1, HA2: [150, Y(98)], LA2: [96, Y(3)], kb2: -1, L: [-48, -38] }
+        { P: [92, Y(70)], T: 145, Hd: 8, HA: [150, Y(86)], eb: -1, HA2: [150, Y(86)], LA2: [96, Y(3)], kb2: -1, L: [6, -2] },
+        { P: [92, Y(70)], T: 145, Hd: 8, HA: [150, Y(86)], eb: -1, HA2: [150, Y(86)], LA2: [96, Y(3)], kb2: -1, L: [-48, -38] }
       ],
-      props: k => tower(160) + `<rect x="146" y="${Y(102)}" width="18" height="6" rx="3" fill="${C.propD}"/>` + tower(22) + cable([26, Y(10)], k.l1[2])
+      props: k => tower(160) + `<rect x="146" y="${Y(90)}" width="18" height="6" rx="3" fill="${C.propD}"/>` + tower(22) + cable([26, Y(10)], k.l1[2])
     },
     cycleR: {
-      view: 'side', seq: [0, 1], hold: [.08, .08],
+      view: 'side', seq: [0, 1], hold: [.12, .12],
       f: [
-        { P: [100, Y(9)], T: -102, Hd: -8, A: [-150, 40], L: [150, 75], L2: [100, 100], F: -30 },
-        { P: [100, Y(9)], T: -104, Hd: -8, A: [-150, 40], L: [100, 100], L2: [150, 75], F: -30 }
+        { P: [104, Y(9)], T: -126, Hd: -14, HA: [50, Y(36)], eb: 1, ab: 1, L: [-158, 96], L2: [104, 99], F: -30 },
+        { P: [104, Y(9)], T: -130, Hd: -14, HA: [49, Y(38)], eb: 1, ab: 1, L: [104, 99], L2: [-158, 96], F: -30 }
       ], props: () => mat
     },
     situps: {
@@ -1768,12 +1847,12 @@ const Figure = (() => {
     },
     butterfly: {
       view: 'front', seq: [0, 1], hold: [.25, .45],
-      f: [{ hy: Y(62), knee: [12, 10], ank: [14, Y(3)], elb: [48, 4], hand: [48, -20] }, { hy: Y(62), knee: [12, 10], ank: [14, Y(3)], elb: [16, 8], hand: [9, -16] }],
+      f: [{ hy: Y(62), knee: [12, 10], ank: [14, Y(3)], elb: [32, 4], hand: [50, 6] }, { hy: Y(62), knee: [12, 10], ank: [14, Y(3)], elb: [17, 8], hand: [5, 12] }],
       props: f => `<rect x="70" y="${Y(64)}" width="60" height="10" rx="5" fill="${C.prop}"/><rect x="86" y="${(f.S[1] - 8).toFixed(1)}" width="28" height="${(f.hy - f.S[1] + 6).toFixed(1)}" rx="6" fill="${C.prop}" opacity=".9"/>` +
-        f.arms.map(a => `<rect x="${(a[1][0] - 4).toFixed(1)}" y="${(a[2][1] - 2).toFixed(1)}" width="8" height="${(a[1][1] - a[2][1] + 6).toFixed(1)}" rx="4" fill="${C.propD}"/>`).join('')
+        f.arms.map(a => `<rect x="${(a[2][0] - 3.5).toFixed(1)}" y="${(a[2][1] - 11).toFixed(1)}" width="7" height="22" rx="3.5" fill="${C.propD}"/>`).join('')
     }
   };
-  LIB.cycleL = { ...LIB.cycleR, f: [{ ...LIB.cycleR.f[0], A: [-150, 40], L: [100, 100], L2: [150, 75] }, { ...LIB.cycleR.f[1], L: [150, 75], L2: [100, 100] }] };
+  LIB.cycleL = { ...LIB.cycleR, f: [LIB.cycleR.f[1], LIB.cycleR.f[0]] };
 
   function frameAt(spec, time) {
     const seq = spec.seq, n = seq.length, seg = 1.05;
