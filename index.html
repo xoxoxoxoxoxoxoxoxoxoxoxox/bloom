@@ -1550,7 +1550,7 @@ const Figure = (() => {
   }
   const mix = (a, b, t) => {
     if (a === undefined) return b; if (b === undefined) return a;
-    if (Array.isArray(a)) return a.map((v, i) => lerp(v, b[i], t));
+    if (Array.isArray(a)) return a.map((v, i) => mix(v, b[i], t));
     if (typeof a === 'number') return lerp(a, b, t);
     return t < .5 ? a : b;
   };
@@ -1561,10 +1561,12 @@ const Figure = (() => {
     const P = po.P, T = po.ST ? angOf(po.P, po.ST) : po.T;
     const S = add(P, T, LEN.torso);
     const Nk = add(S, T + (po.Hd || 0) * .4, LEN.neck);
-    const Hc = add(Nk, T + (po.Hd || 0), LEN.head);
+    let Hc = add(Nk, T + (po.Hd || 0), LEN.head);
+    if (Hc[1] > G - LEN.head - 1.2) Hc = [Hc[0], G - LEN.head - 1.2];
     const arm = (A, HA, eb) => {
-      if (HA) { const [e, h] = ik(S, HA, LEN.ua, LEN.fa, eb ?? 1); return [S, e, h]; }
-      const e = add(S, A[0], LEN.ua); return [S, e, add(e, A[1], LEN.fa)];
+      const cl = p => [p[0], Math.min(p[1], G - 3.2)];
+      if (HA) { const [e, h] = ik(S, cl(HA), LEN.ua, LEN.fa, eb ?? 1); return [S, cl(e), cl(h)]; }
+      const e = cl(add(S, A[0], LEN.ua)); return [S, e, cl(add(e, A[1], LEN.fa))];
     };
     const leg = (L, LA, kb) => {
       let k, a;
@@ -1591,13 +1593,16 @@ const Figure = (() => {
       const [k, a] = ik(hip, an, LEN.th, LEN.sh, s * (po.kOut ?? 1) * -1);
       return [hip, k, a];
     });
+    const sx = po.sx || 0; S[0] += sx;
+    const Hc2 = [cx + sx, Hc[1]]; Hc[0] = Hc2[0];
     const arms = [-1, 1].map(s => {
       const sh = [S[0] + s * sw, S[1] + 3];
+      if (po.armsAbs) { const a = po.armsAbs[s < 0 ? 0 : 1]; return [sh, [cx + a[0], S[1] + a[1]], [cx + a[2], S[1] + a[3]]]; }
       if (po.elb) { const e = [cx + s * po.elb[0], S[1] + po.elb[1]]; const h = [cx + s * po.hand[0], S[1] + po.hand[1]]; return [sh, e, h]; }
       const [e, h] = ik(sh, [cx + s * po.hand[0], S[1] + po.hand[1]], LEN.ua, LEN.fa, s * (po.eOut ?? 1));
       return [sh, e, h];
     });
-    return { S, Hc, hy, cx, legs, arms, hw, sw };
+    return { S, Hc, hy, cx, legs, arms, hw, sw, seat: po.seat };
   }
 
   const C = { skin: '#F3CBB5', skin2: '#E2B19A', top: '#B9A3D6', top2: '#A893CA', leg: '#8C78BF', leg2: '#B8AADA', hair: '#5E4A66', shoe: '#F2B8A0', shoe2: '#E9C3B3', sole: '#FFF6F0', tie: '#9CCBB2', ink: '#423748', blush: '#EE9F8A', band: '#A08DCB', mouth: '#B5756A', prop: '#D9CDE2', propD: '#B3A3C2', metal: '#9C8FA8', plate: '#9CCBB2', ground: '#E8DDE6' };
@@ -1652,8 +1657,9 @@ const Figure = (() => {
     const uh = dir(T + (Hd || 0)), nh = [-uh[1], uh[0]], r = LEN.head;
     const at = (deg, rr = r) => { const t = deg * D; return [Hc[0] + rr * (nh[0] * Math.cos(t) + uh[0] * Math.sin(t)), Hc[1] + rr * (nh[1] * Math.cos(t) + uh[1] * Math.sin(t))]; };
     const tieP = at(165, r + .6);
-    let tailEnd = V(V(tieP, nh, -5), [0, 1], 10);
-    if (tailEnd[1] > G - 3) { const back = nh[0] > 0 ? -1 : 1; tailEnd = [tieP[0] + back * 11, G - 3]; }
+    const td = nrm(V(V([0, 0], nh, -.75), [0, 1], .9));
+    let tailEnd = V(tieP, td, 11.5);
+    if (tailEnd[1] > G - 2.6) { const over = tailEnd[1] - (G - 2.6); tailEnd = [tailEnd[0] + (td[0] >= 0 ? 1 : -1) * over * .9, G - 2.6]; }
     let s = capsule(tieP, tailEnd, 4.2, 1.6, C.hair, 1.2);
     s += dot(Hc, r, C.skin);
     const hairPts = []; for (let a = 52; a <= 262; a += 15) hairPts.push(at(a, r + .9));
@@ -1685,27 +1691,30 @@ const Figure = (() => {
   }
 
   function drawFront(f) {
-    const cx = f.cx, Sy = f.S[1], hy = f.hy, H = hy - Sy, y = t => Sy + H * t;
+    const cx = f.cx, Sy = f.S[1], hy = f.hy, H = hy - Sy, y = t => Sy + H * t, sx = f.S[0] - cx, X = (x, t) => x + sx * (1 - t);
     let s = '';
-    f.legs.forEach(l => {
+    const legs = () => { let s = ''; f.legs.forEach(l => {
       const [hip, kn, an] = l, out = an[0] > cx ? 1 : -1;
       s += capsule(hip, kn, 7, 4.9, C.leg, .6) + dot(kn, 4.8, C.leg) + capsule(kn, an, 4.6, 2.9, C.leg, .8);
       s += capsule([an[0] - out * 1, an[1] - 1], [an[0] + out * 4.5, an[1] + .6], 3.5, 2.8, C.shoe);
-    });
-    const torso = [[cx - 6, Sy - 1.5], [cx - 13.5, Sy + 1.5], [cx - 13, y(.3)], [cx - 9.4, y(.6)], [cx - 11.6, hy - 1], [cx - 10, hy + 7], [cx, hy + 8.5], [cx + 10, hy + 7], [cx + 11.6, hy - 1], [cx + 9.4, y(.6)], [cx + 13, y(.3)], [cx + 13.5, Sy + 1.5], [cx + 6, Sy - 1.5]];
+    }); return s; };
+    if (!f.seat) s += legs();
+    const torso = [[X(cx - 6, 0), Sy - 1.5], [X(cx - 13.5, 0), Sy + 1.5], [X(cx - 13, .3), y(.3)], [X(cx - 9.4, .6), y(.6)], [cx - 11.6, hy - 1], [cx - 10, hy + 7], [cx, hy + 8.5], [cx + 10, hy + 7], [cx + 11.6, hy - 1], [X(cx + 9.4, .6), y(.6)], [X(cx + 13, .3), y(.3)], [X(cx + 13.5, 0), Sy + 1.5], [X(cx + 6, 0), Sy - 1.5]];
     s += `<path d="${smooth(torso)}" fill="${C.top}"/>`;
     const low = [[cx - 10.2, y(.68)], [cx - 11.6, hy - 1], [cx - 10, hy + 7], [cx, hy + 8.5], [cx + 10, hy + 7], [cx + 11.6, hy - 1], [cx + 10.2, y(.68)], [cx, y(.69)]];
     s += `<path d="${smooth(low)}" fill="${C.leg}"/>`;
     s += `<path d="M${f1(cx - 10.2)} ${f1(y(.68))}Q${cx} ${f1(y(.7))} ${f1(cx + 10.2)} ${f1(y(.68))}" stroke="${C.band}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+    if (f.seat) s += legs();
     f.arms.forEach(a => { s += capsule(a[0], a[1], 4, 3, C.skin, .4) + dot(a[1], 2.9, C.skin) + capsule(a[1], a[2], 3, 2.2, C.skin, .3) + dot(a[2], 3, C.skin); });
-    const Hc = f.Hc;
-    s += capsule([cx, Sy + 2], [cx, Sy - LEN.neck], 3.4, 3.1, C.skin2);
-    s += dot([cx, Hc[1] - 10.5], 5.2, C.hair) + dot([cx, Hc[1] - 6.8], 2.2, C.tie);
+    const Hc = f.Hc; { const c0 = cx; }
+    const hx = f.S[0];
+    s += capsule([hx, Sy + 2], [hx, Sy - LEN.neck], 3.4, 3.1, C.skin2);
+    s += dot([hx, Hc[1] - 10.5], 5.2, C.hair) + dot([hx, Hc[1] - 6.8], 2.2, C.tie);
     s += dot(Hc, LEN.head, C.skin);
-    s += `<path d="M${f1(cx - 10.2)} ${f1(Hc[1] + 1.5)}C${f1(cx - 11)} ${f1(Hc[1] - 13)} ${f1(cx + 11)} ${f1(Hc[1] - 13)} ${f1(cx + 10.2)} ${f1(Hc[1] + 1.5)}C${f1(cx + 7.5)} ${f1(Hc[1] - 4)} ${f1(cx + 2)} ${f1(Hc[1] - 6.5)} ${cx} ${f1(Hc[1] - 6)}C${f1(cx - 3)} ${f1(Hc[1] - 6.5)} ${f1(cx - 7.5)} ${f1(Hc[1] - 4)} ${f1(cx - 10.2)} ${f1(Hc[1] + 1.5)}Z" fill="${C.hair}"/>`;
-    s += dot([cx - 3.4, Hc[1] + .8], 1.1, C.ink) + dot([cx + 3.4, Hc[1] + .8], 1.1, C.ink);
-    s += dot([cx - 5.3, Hc[1] + 3.6], 1.9, C.blush, .55) + dot([cx + 5.3, Hc[1] + 3.6], 1.9, C.blush, .55);
-    s += `<path d="M${f1(cx - 1.6)} ${f1(Hc[1] + 4.6)}Q${cx} ${f1(Hc[1] + 5.8)} ${f1(cx + 1.6)} ${f1(Hc[1] + 4.6)}" stroke="${C.mouth}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+    s += `<path d="M${f1(hx - 10.2)} ${f1(Hc[1] + 1.5)}C${f1(hx - 11)} ${f1(Hc[1] - 13)} ${f1(hx + 11)} ${f1(Hc[1] - 13)} ${f1(hx + 10.2)} ${f1(Hc[1] + 1.5)}C${f1(hx + 7.5)} ${f1(Hc[1] - 4)} ${f1(hx + 2)} ${f1(Hc[1] - 6.5)} ${hx} ${f1(Hc[1] - 6)}C${f1(hx - 3)} ${f1(Hc[1] - 6.5)} ${f1(hx - 7.5)} ${f1(Hc[1] - 4)} ${f1(hx - 10.2)} ${f1(Hc[1] + 1.5)}Z" fill="${C.hair}"/>`;
+    s += dot([hx - 3.4, Hc[1] + .8], 1.1, C.ink) + dot([hx + 3.4, Hc[1] + .8], 1.1, C.ink);
+    s += dot([hx - 5.3, Hc[1] + 3.6], 1.9, C.blush, .55) + dot([hx + 5.3, Hc[1] + 3.6], 1.9, C.blush, .55);
+    s += `<path d="M${f1(hx - 1.6)} ${f1(Hc[1] + 4.6)}Q${hx} ${f1(Hc[1] + 5.8)} ${f1(hx + 1.6)} ${f1(Hc[1] + 4.6)}" stroke="${C.mouth}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
     return s;
   }
   /* Requisiten */
@@ -1782,19 +1791,19 @@ const Figure = (() => {
       ], props: () => mat
     },
     lowtwist: {
-      view: 'side', seq: [0, 1, 0, 2], hold: [.05, .12, .05, .12],
+      view: 'front', seq: [0, 1, 0, 2], hold: [.04, .14, .04, .14],
       f: [
-        { P: [100, Y(9)], T: -150, Hd: -4, HA: [118, Y(40)], HA2: [118, Y(40)], eb: -1, LA: [146, Y(3)], kb: -1 },
-        { P: [100, Y(9)], T: -146, Hd: -4, HA: [114, Y(16)], HA2: [116, Y(20)], eb: -1, LA: [146, Y(3)], kb: -1 },
-        { P: [100, Y(9)], T: -154, Hd: -4, HA: [104, Y(26)], HA2: [102, Y(22)], eb: -1, LA: [146, Y(3)], kb: -1 }
+        { hy: Y(10), tShort: .86, seat: 1, knee: [23, -21], ank: [12, Y(2)], sx: 0, armsAbs: [[-15, 16, -3, 25], [15, 16, 3, 25]] },
+        { hy: Y(10), tShort: .86, seat: 1, knee: [23, -21], ank: [12, Y(2)], sx: -7, armsAbs: [[-24, 24, -31, 44], [-4, 24, -25, 45]] },
+        { hy: Y(10), tShort: .86, seat: 1, knee: [23, -21], ank: [12, Y(2)], sx: 7, armsAbs: [[4, 24, 25, 45], [24, 24, 31, 44]] }
       ], props: () => mat
     },
     twist: {
-      view: 'side', seq: [0, 1, 0, 2], hold: [.05, .12, .05, .12],
+      view: 'front', seq: [0, 1, 0, 2], hold: [.04, .14, .04, .14],
       f: [
-        { P: [100, Y(9)], T: -152, Hd: -4, HA: [118, Y(42)], HA2: [118, Y(42)], eb: -1, LA: [144, Y(24)], kb: -1 },
-        { P: [100, Y(9)], T: -148, Hd: -4, HA: [114, Y(18)], HA2: [116, Y(22)], eb: -1, LA: [144, Y(22)], kb: -1 },
-        { P: [100, Y(9)], T: -156, Hd: -4, HA: [104, Y(28)], HA2: [102, Y(24)], eb: -1, LA: [144, Y(26)], kb: -1 }
+        { hy: Y(10), tShort: .84, seat: 1, knee: [23, -23], ank: [12, Y(14)], sx: 0, armsAbs: [[-15, 16, -3, 25], [15, 16, 3, 25]] },
+        { hy: Y(10), tShort: .84, seat: 1, knee: [23, -23], ank: [12, Y(14)], sx: -7, armsAbs: [[-24, 22, -32, 34], [-4, 22, -26, 35]] },
+        { hy: Y(10), tShort: .84, seat: 1, knee: [23, -23], ank: [12, Y(14)], sx: 7, armsAbs: [[4, 22, 26, 35], [24, 22, 32, 34]] }
       ], props: () => mat
     },
     singleleg: {
